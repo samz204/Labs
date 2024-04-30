@@ -1,0 +1,124 @@
+// Include files for required libraries
+#include <opencv2/imgproc.hpp>
+#include <stdio.h>
+#include "opencv_aee.hpp"
+#include "main.hpp"     // You can use this file for declaring defined values and functions
+#include "pi2c.h"
+
+Pi2c car(0x22); // Configure the I2C interface to the Car as a global variable
+
+float error_count = 0;
+Point regionCentre;
+
+void setup(void)
+{
+    setupCamera(320, 240);  // Enable the camera for OpenCV
+}
+
+int main( int argc, char** argv )
+{
+    setup();    // Call a setup function to prepare IO and devices
+
+    int previousError;
+    /*
+        Pi2c arduino(04); //Create a new object "arduino" using address "0x07"
+        char receive[16]; //Create a buffer of char (single bytes) for the data
+
+        //Receive from the Arduino and put the contents into the "receive" char array
+        arduino.i2cRead(receive,16);
+         //Print out what the Arduino is sending...
+        std::cout << "Arduino Says: " << receive << std::endl;
+
+        //Send an 16 bit integer
+        arduino.i2cWriteArduinoInt(4356);
+
+        */
+
+    while(1)    // Main loop to perform image processing
+    {
+        Mat frame;
+        Mat Frame_HSV;
+
+        while(frame.empty())
+            frame = captureFrame(); // Capture a frame from the camera and store in a new matrix variable
+        cvtColor(frame, Frame_HSV, COLOR_BGR2HSV); // Convert the image to HSV
+
+        Mat blackMask;
+        inRange(Frame_HSV, Scalar(0, 0, 0), Scalar(180, 255, 57), Frame_HSV);
+        //dilate(blackMask, blackMask, Mat(), Point(-1, -1), 10);
+
+
+        std::vector< std::vector<cv::Point> > contours; // Variable for list of
+        std::vector<Vec4i> hierarchy; // Variable for image topology data
+        cv::findContours(Frame_HSV, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0,0));
+
+        if (contours.size() > 0)
+        {
+            //cvtColor(, frame, COLOR_HSV2BGR);
+            //std::vector<std::vector<cv::Point>>approxContours(contours.size());
+            int maxArea = 0;
+            int maxArea_index = -1;
+            for(int i = 0; i < contours.size(); i++)  // Loop through the contours
+            {
+
+                int area = cv::contourArea(contours[i]);
+                if ( area > maxArea)
+                {
+                    maxArea = area;
+                    maxArea_index = i;
+                }
+            }
+            std::vector< std::vector<cv::Point> > approxedcontours(contours.size());
+                //Array for new contours
+            for(int i = 0; i < contours.size(); i++)
+            {
+                cv::approxPolyDP(contours[i],approxedcontours[i], 10, true);
+                regionCentre = findContourCentre(contours[i]);
+                    //Approximate the contour
+            }
+            if (maxArea_index != -1)
+                drawContours( frame, approxedcontours, maxArea_index, Scalar(0,0,255), 2, LINE_8, noArray(), 0,Point());
+            imshow("redcontour", frame);
+            //regionCentre = findContourCentre(contours[i]); // Calculate the centre point
+            //printf("Contour centre: x = %dpx, y = %dpx\n", regionCentre.x,regionCentre.y);
+            //circle(frame, regionCentre, 5, Scalar(255, 255, 255), FILLED);
+
+                //float error;
+                /*float kp = 1;
+                float ki = 0.5;
+                float kd = 0.5;
+                int centreOffset = 0;
+                int screenCentre = 320;
+
+                error = (screenCentre - regionCentre.x + centreOffset);
+                int errorSum = errorSum + error;
+                int previousError = error;
+                int u = (kp * error) + (ki * errorSum) + (kd * (error - previous error));*/
+
+             Pi2c arduino(4);
+             arduino.i2cWriteArduinoInt(regionCentre.x);
+                //printf("regionCentre = %d", regionCentre.x);
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+        int key = cv::waitKey(1);   // Wait 1ms for a keypress (required to update windows)
+
+        key = (key==255) ? -1 : key;    // Check if the ESC key has been pressed
+        if (key == 27)
+            break;
+
+    }
+    closeCV();  // Disable the camera and close any windows
+
+    return 0;
+}
